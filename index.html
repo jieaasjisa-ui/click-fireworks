@@ -120,16 +120,23 @@
     (function () {
       var canvas = document.getElementById("stage");
       var ctx = canvas.getContext("2d");
-      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var isMobile = /Android|iPhone|iPad|iPod|Mobile|MicroMessenger/i.test(navigator.userAgent);
+      var dprLimit = isMobile ? 1.15 : 1.75;
+      var dpr = Math.min(window.devicePixelRatio || 1, dprLimit);
       var width = 0;
       var height = 0;
       var particles = [];
       var rockets = [];
       var lastTrailAt = 0;
+      var lastTapAt = 0;
+      var maxParticles = isMobile ? 190 : 420;
+      var burstRange = isMobile ? [30, 46] : [54, 78];
+      var rocketBurstCount = isMobile ? 42 : 72;
+      var moveBurstCount = isMobile ? 12 : 24;
       var palette = ["#ff4d8d", "#ffd166", "#55d6ff", "#8aff80", "#b18cff", "#ff8a4c", "#ffffff"];
 
       function resize() {
-        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        dpr = Math.min(window.devicePixelRatio || 1, dprLimit);
         width = window.innerWidth;
         height = window.innerHeight;
         canvas.width = Math.floor(width * dpr);
@@ -146,26 +153,29 @@
       }
 
       function burst(x, y, count, baseColor) {
-        var total = count || Math.floor(random(54, 86));
+        var total = count || Math.floor(random(burstRange[0], burstRange[1]));
         var chosen = baseColor || color();
+        if (particles.length > maxParticles) {
+          particles.splice(0, particles.length - maxParticles);
+        }
 
         for (var i = 0; i < total; i += 1) {
           var angle = (Math.PI * 2 * i) / total + random(-0.08, 0.08);
-          var speed = random(1.4, 5.8);
+          var speed = random(1.2, isMobile ? 4.1 : 5.5);
           particles.push({
             x: x,
             y: y,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
-            life: random(48, 86),
+            life: random(isMobile ? 34 : 46, isMobile ? 58 : 78),
             age: 0,
-            size: random(1.1, 2.9),
+            size: random(1, isMobile ? 2.2 : 2.8),
             color: chosen,
             sparkle: Math.random() > 0.64
           });
         }
 
-        for (var s = 0; s < 8; s += 1) {
+        for (var s = 0; s < (isMobile ? 3 : 7); s += 1) {
           particles.push({
             x: x,
             y: y,
@@ -181,6 +191,7 @@
       }
 
       function launch(x, y) {
+        if (rockets.length > (isMobile ? 2 : 5)) rockets.shift();
         rockets.push({
           x: x,
           y: height + 20,
@@ -199,8 +210,10 @@
         var size = p.size * (p.sparkle ? 1 + Math.sin(p.age * 0.65) * 0.3 : 1);
         ctx.globalAlpha = alpha;
         ctx.fillStyle = p.color;
-        ctx.shadowBlur = 16;
-        ctx.shadowColor = p.color;
+        if (!isMobile) {
+          ctx.shadowBlur = 12;
+          ctx.shadowColor = p.color;
+        }
         ctx.beginPath();
         ctx.arc(p.x, p.y, Math.max(0.2, size), 0, Math.PI * 2);
         ctx.fill();
@@ -209,7 +222,7 @@
       function drawRocket(r) {
         ctx.globalAlpha = 1;
         ctx.strokeStyle = r.color;
-        ctx.shadowBlur = 18;
+        ctx.shadowBlur = isMobile ? 0 : 14;
         ctx.shadowColor = r.color;
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -247,7 +260,7 @@
           drawRocket(rocket);
 
           if (rocket.y <= rocket.ty || rocket.vy > 1) {
-            burst(rocket.x, rocket.y, 76, rocket.color);
+            burst(rocket.x, rocket.y, rocketBurstCount, rocket.color);
             rockets.splice(r, 1);
           }
         }
@@ -276,6 +289,9 @@
 
       function handleTap(event) {
         if (event.cancelable) event.preventDefault();
+        var now = Date.now();
+        if (isMobile && now - lastTapAt < 170) return;
+        lastTapAt = now;
         var point = pointFromEvent(event);
         launch(point.x, Math.max(70, point.y));
       }
@@ -283,10 +299,10 @@
       function handleMove(event) {
         if (event.cancelable) event.preventDefault();
         var now = Date.now();
-        if (now - lastTrailAt < 90) return;
+        if (now - lastTrailAt < (isMobile ? 170 : 95)) return;
         lastTrailAt = now;
         var point = pointFromEvent(event);
-        burst(point.x, point.y, 28);
+        burst(point.x, point.y, moveBurstCount);
       }
 
       window.addEventListener("resize", resize, false);
