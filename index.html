@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="theme-color" content="#080914">
+  <title>点击烟花</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 14%, rgba(255, 255, 255, 0.16) 0 1px, transparent 2px),
+        radial-gradient(circle at 76% 24%, rgba(255, 255, 255, 0.13) 0 1px, transparent 2px),
+        radial-gradient(circle at 55% 64%, rgba(255, 255, 255, 0.10) 0 1px, transparent 2px),
+        linear-gradient(180deg, #070813 0%, #10152b 52%, #07101d 100%);
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      touch-action: none;
+      overscroll-behavior: none;
+    }
+
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+
+    .hud {
+      position: fixed;
+      left: 0;
+      right: 0;
+      top: max(18px, env(safe-area-inset-top));
+      z-index: 2;
+      display: grid;
+      gap: 8px;
+      justify-items: center;
+      padding: 0 22px;
+      pointer-events: none;
+      text-align: center;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.5);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(26px, 9vw, 54px);
+      line-height: 1.05;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    p {
+      max-width: 520px;
+      margin: 0;
+      color: rgba(255, 255, 255, 0.78);
+      font-size: clamp(14px, 3.8vw, 18px);
+      line-height: 1.45;
+    }
+
+    .footer {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: max(16px, env(safe-area-inset-bottom));
+      z-index: 2;
+      display: flex;
+      justify-content: center;
+      padding: 0 18px;
+      pointer-events: none;
+    }
+
+    .hint {
+      min-height: 38px;
+      padding: 9px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 999px;
+      background: rgba(4, 7, 18, 0.34);
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 14px;
+      line-height: 20px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.24);
+    }
+
+    @media (max-width: 520px) {
+      .hud {
+        top: max(22px, env(safe-area-inset-top));
+      }
+
+      .hint {
+        width: min(100%, 320px);
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="stage" aria-label="点击或触摸生成烟花"></canvas>
+  <main class="hud">
+    <h1>点亮这一刻</h1>
+    <p>点击、轻触或滑动屏幕，烟花会在指尖绽放。</p>
+  </main>
+  <div class="footer">
+    <div class="hint">适合手机浏览器和微信内打开</div>
+  </div>
+
+  <script>
+    (function () {
+      var canvas = document.getElementById("stage");
+      var ctx = canvas.getContext("2d");
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var width = 0;
+      var height = 0;
+      var particles = [];
+      var rockets = [];
+      var lastTrailAt = 0;
+      var palette = ["#ff4d8d", "#ffd166", "#55d6ff", "#8aff80", "#b18cff", "#ff8a4c", "#ffffff"];
+
+      function resize() {
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function random(min, max) {
+        return Math.random() * (max - min) + min;
+      }
+
+      function color() {
+        return palette[Math.floor(Math.random() * palette.length)];
+      }
+
+      function burst(x, y, count, baseColor) {
+        var total = count || Math.floor(random(54, 86));
+        var chosen = baseColor || color();
+
+        for (var i = 0; i < total; i += 1) {
+          var angle = (Math.PI * 2 * i) / total + random(-0.08, 0.08);
+          var speed = random(1.4, 5.8);
+          particles.push({
+            x: x,
+            y: y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: random(48, 86),
+            age: 0,
+            size: random(1.1, 2.9),
+            color: chosen,
+            sparkle: Math.random() > 0.64
+          });
+        }
+
+        for (var s = 0; s < 8; s += 1) {
+          particles.push({
+            x: x,
+            y: y,
+            vx: random(-1.3, 1.3),
+            vy: random(-1.3, 1.3),
+            life: random(20, 38),
+            age: 0,
+            size: random(3, 5),
+            color: "#ffffff",
+            sparkle: true
+          });
+        }
+      }
+
+      function launch(x, y) {
+        rockets.push({
+          x: x,
+          y: height + 20,
+          tx: x,
+          ty: y,
+          vx: random(-0.4, 0.4),
+          vy: -random(7, 10),
+          color: color(),
+          trail: []
+        });
+      }
+
+      function drawParticle(p) {
+        var t = p.age / p.life;
+        var alpha = Math.max(0, 1 - t);
+        var size = p.size * (p.sparkle ? 1 + Math.sin(p.age * 0.65) * 0.3 : 1);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = p.color;
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, Math.max(0.2, size), 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function drawRocket(r) {
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = r.color;
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = r.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (var i = 0; i < r.trail.length; i += 1) {
+          var point = r.trail[i];
+          if (i === 0) {
+            ctx.moveTo(point.x, point.y);
+          } else {
+            ctx.lineTo(point.x, point.y);
+          }
+        }
+        ctx.stroke();
+
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function animate() {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.globalAlpha = 0.18;
+        ctx.fillStyle = "#070813";
+        ctx.fillRect(0, 0, width, height);
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = 1;
+
+        for (var r = rockets.length - 1; r >= 0; r -= 1) {
+          var rocket = rockets[r];
+          rocket.trail.push({ x: rocket.x, y: rocket.y });
+          if (rocket.trail.length > 12) rocket.trail.shift();
+          rocket.x += rocket.vx + (rocket.tx - rocket.x) * 0.025;
+          rocket.y += rocket.vy;
+          rocket.vy += 0.12;
+          drawRocket(rocket);
+
+          if (rocket.y <= rocket.ty || rocket.vy > 1) {
+            burst(rocket.x, rocket.y, 76, rocket.color);
+            rockets.splice(r, 1);
+          }
+        }
+
+        for (var i = particles.length - 1; i >= 0; i -= 1) {
+          var p = particles[i];
+          p.age += 1;
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vx *= 0.985;
+          p.vy = p.vy * 0.985 + 0.045;
+          drawParticle(p);
+          if (p.age >= p.life) particles.splice(i, 1);
+        }
+
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
+        requestAnimationFrame(animate);
+      }
+
+      function pointFromEvent(event) {
+        var touch = event.touches && event.touches[0] ? event.touches[0] : event.changedTouches && event.changedTouches[0];
+        if (touch) return { x: touch.clientX, y: touch.clientY };
+        return { x: event.clientX, y: event.clientY };
+      }
+
+      function handleTap(event) {
+        if (event.cancelable) event.preventDefault();
+        var point = pointFromEvent(event);
+        launch(point.x, Math.max(70, point.y));
+      }
+
+      function handleMove(event) {
+        if (event.cancelable) event.preventDefault();
+        var now = Date.now();
+        if (now - lastTrailAt < 90) return;
+        lastTrailAt = now;
+        var point = pointFromEvent(event);
+        burst(point.x, point.y, 28);
+      }
+
+      window.addEventListener("resize", resize, false);
+      window.addEventListener("orientationchange", resize, false);
+      canvas.addEventListener("click", handleTap, false);
+      canvas.addEventListener("touchstart", handleTap, { passive: false });
+      canvas.addEventListener("touchmove", handleMove, { passive: false });
+
+      resize();
+      animate();
+
+      setTimeout(function () {
+        launch(width * 0.5, height * 0.38);
+      }, 450);
+    })();
+  </script>
+</body>
+</html>
